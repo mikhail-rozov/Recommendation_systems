@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 
 
-def prefilter_items(data, item_features=None):
+def prefilter_items(data, item_features=None, n_popular=5000):
     
     # Уберем самые популярные товары (их и так купят)
     
@@ -41,7 +41,12 @@ def prefilter_items(data, item_features=None):
     # Уберем слишком дорогие товары
     
     too_expensive = prices.loc[prices['price'] >= 50, 'item_id'].tolist()
-    # ...
+    
+    # Оставим только n самых популярных товаров
+    
+    popular = data.groupby('item_id', sort=False)['quantity'].sum().reset_index()
+    top = popular.sort_values('quantity', ascending=False).head(n_popular).item_id.tolist()
+    data.loc[~data['item_id'].isin(top), 'item_id'] = 999_999
     
     return data
     
