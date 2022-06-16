@@ -27,17 +27,6 @@ class MainRecommender:
         self.user_item_matrix = self.prepare_matrix(self.data)  # pd.DataFrame
         self.id_to_itemid, self.id_to_userid, self.itemid_to_id, self.userid_to_id = self.prepare_dicts(self.user_item_matrix)
         
-        # Топ покупок каждого юзера
-        self.top_purchases = data.groupby(['user_id', 'item_id'], sort=False)['quantity'].count().reset_index()
-        self.top_purchases.sort_values('quantity', ascending=False, inplace=True)
-        self.top_purchases = self.top_purchases[self.top_purchases['item_id'] != 999999]
-        
-        # Топ покупок по всему датасету
-        self.overall_top_purchases = data.groupby('item_id', sort=False)['quantity'].count().reset_index()
-        self.overall_top_purchases.sort_values('quantity', ascending=False, inplace=True)
-        self.overall_top_purchases = self.overall_top_purchases[self.overall_top_purchases['item_id'] != 999999]
-        self.overall_top_purchases = self.overall_top_purchases.item_id.tolist()
-        
         if weighting:
             self.user_item_matrix = bm25_weight(self.user_item_matrix.T).T 
         
@@ -104,57 +93,40 @@ class MainRecommender:
         
         return model
 
-    def extend_with_top_popular(self, recs, N=5):
-        if len(recs) < N:
-            diff = N - len(recs)
-            recs += self.overall_top_purchases[:diff]
-    
-        return recs
-    
     def get_similar_items_recommendation(self, user, N=5):
         """Рекомендуем товары, похожие на топ-N купленных юзером товаров"""
+
+        # your_code
         
-        top_user_purchases = self.top_purchases.loc[self.top_purchases['user_id'] == user].head(N)
+        popularity = self.data.groupby(['user_id', 'item_id'], sort=False)['quantity'].count().reset_index()
+        popularity.sort_values('quantity', ascending=False, inplace=True)
+        popularity = popularity.groupby('user_id').head(N)
         
-        recs = top_user_purchases['item_id'].apply(lambda x: self.id_to_itemid \
-                                                   [self.model.similar_items(self.itemid_to_id[x], N=2)[1][0]]).tolist()
+        items = popularity.loc[popularity['user_id'] == user, 'item_id'].tolist()
+        recs = [self.id_to_itemid[self.model.similar_items(self.itemid_to_id[item], N=2)[1][0]] for item in items]
         
-        recs = self.extend_with_top_popular(recs, N=N)
-        
+        # Есть пользователи, которые могли купить меньше, чем N разных товаров.
+        # Так как в конце функции нам установлена проверка на количество рекомендаций,
+        # то будем заполнять недостающие рекомендации похожими товарам на топ-1 для
+        # таких юзеров
+        if len(recs) < N:
+            diff = N - len(recs)
+            recs += [self.id_to_itemid[self.model.similar_items(self.itemid_to_id[items[0]], N=diff+2)[i][0]] for i in range(2, diff+2)]
+
         assert len(recs) == N, 'Количество рекомендаций != {}'.format(N)
         return recs
     
     def get_similar_users_recommendation(self, user, N=5):
         """Рекомендуем топ-N товаров, среди купленных похожими юзерами"""
+
+        # your_code
+        
+        popularity = self.data.groupby(['user_id', 'item_id'], sort=False)['quantity'].count().reset_index()
+        popularity.sort_values('quantity', ascending=False, inplace=True)
+        popularity = popularity.groupby('user_id').head(1)
         
         users = [self.id_to_userid[self.model.similar_users(self.userid_to_id[user], N=N+1)[i][0]] for i in range(1, N+1)]
-        
-        top_user_purchases = self.top_purchases.loc[self.top_purchases['user_id'].isin(users)].groupby('user_id', sort=False).head(1)
-        recs = top_user_purchases['item_id'].unique().tolist()
-        
-        recs = self.extend_with_top_popular(recs, N=N)
+        recs = popularity.loc[popularity['user_id'].isin(users), 'item_id'].tolist()
         
         assert len(recs) == N, 'Количество рекомендаций != {}'.format(N)
         return recs
-    
-    def get_recommendations(self, model, user, N=5):
-        
-        recs = [self.id_to_itemid[rec[0]] for rec in 
-                    model.recommend(userid=self.userid_to_id[user], 
-                                    user_items=csr_matrix(self.user_item_matrix),   # на вход user-item matrix
-                                    N=N, 
-                                    filter_already_liked_items=False, 
-                                    filter_items=[self.itemid_to_id[999_999]], 
-                                    recalculate_user=True)]
-        
-        recs = self.extend_with_top_popular(recs, N=N)
-        
-        return recs
-    
-    
-    def get_als_recommendations(self, user, N=5):
-        return self.get_recommendations(model=self.model, user=user, N=N)
-    
-    
-    def get_own_recommendations(self, user, N=5):
-        return self.get_recommendations(model=self.own_recommender, user=user, N=N)
