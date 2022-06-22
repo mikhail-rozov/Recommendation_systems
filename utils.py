@@ -4,11 +4,11 @@ import numpy as np
 
 def prefilter_items(data, item_features=None, n_popular=5000):
     
-    # Уберем самые популярные товары (их и так купят)
+#     # Уберем самые популярные товары (их и так купят)
     
-    popularity = data.groupby('item_id', sort=False)['quantity'].sum().reset_index()
-    top_100 = popularity.sort_values('quantity', ascending=False).head(100)['item_id'].tolist()
-    data = data.loc[~data['item_id'].isin(top_100)]
+#     popularity = data.groupby('item_id', sort=False)['quantity'].sum().reset_index()
+#     top_100 = popularity.sort_values('quantity', ascending=False).head(100)['item_id'].tolist()
+#     data = data.loc[~data['item_id'].isin(top_100)]
     
     # Уберем товары, которые не продавались за последние 12 месяцев
     
